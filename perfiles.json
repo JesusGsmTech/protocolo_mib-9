@@ -1,0 +1,17 @@
+{
+  "comun": {
+    "divisa": "ars",
+    "auto": true,
+    "add": false,
+    "beep": false,
+    "sensores": { "uv": true, "mr": true, "ir": true },
+    "niveles": { "uv": 3, "mr": 3, "ir": 3 },
+    "bandejas": { "rechazo": 100, "salida": 300 }
+  },
+  "perfiles": {
+    "1": { "nombre": "Mixto sin límite", "modo": "mixto", "batch": false },
+    "2": { "nombre": "Mixto con límite", "modo": "mixto", "batch": true, "lote": 100 },
+    "3": { "nombre": "Single sin denominación, sin límite", "modo": "single", "denom": "dd", "batch": false },
+    "4": { "nombre": "Single sin denominación, con límite", "modo": "single", "denom": "dd", "batch": true, "lote": 100 }
+  }
+}

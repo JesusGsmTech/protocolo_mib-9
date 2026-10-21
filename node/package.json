@@ -1,0 +1,19 @@
+{
+  "name": "contadora-sb9",
+  "version": "1.0.0",
+  "description": "Herramientas Node.js para comunicarse con las contadoras de billetes SB-7 / SB-9 (protocolo IFD)",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node probar.js",
+    "red": "node probar.js --ip 192.168.123.231",
+    "prueba": "node probar.js --prueba",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "serialport": "^13.0.0"
+  }
+}

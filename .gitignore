@@ -1,0 +1,38 @@
+# ---- Visual C++ / Visual Studio (proyecto IFD.exe) ----
+Debug/
+Release/
+x64/
+.vs/
+ipch/
+*.aps
+*.APS
+*.ncb
+*.suo
+*.user
+*.opt
+*.plg
+*.sdf
+*.opensdf
+*.VC.db
+
+# ---- Python ----
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# ---- Node ----
+node_modules/
+
+# ---- Logs de las consolas (se generan en cada sesión) ----
+python/logs/
+node/logs/
+*.log
+
+# ---- Capturas ----
+# Exportada sin filtro: incluye tráfico de red ajeno a la contadora
+python/capturas/Counting Result Request.pcapng
+
+# ---- Sistema ----
+Thumbs.db
+desktop.ini
