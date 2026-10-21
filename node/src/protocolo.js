@@ -127,14 +127,25 @@ const MODOS2 = {
 };
 const VELOCIDAD = { 0: "1000 rpm", 1: "1200 rpm", 2: "1500 rpm", 3: "600 rpm", 4: "800 rpm", 5: "900 rpm" };
 
-// Billetes por índice de denominación, según código de moneda.
-// ARS: confirmados con billetes reales (2026-09-29): 3 = $100, 7 = $2000, 8 = $10000.
-// El resto sigue el orden ascendente del protocolo (0 = menor valor).
+// Billetes por índice de denominación, según código de moneda. Valores base (SB-9);
+// cada modelo de ../../maquinas.json puede reemplazar la lista de una moneda (usarBilletes).
+// SB-9, ARS: confirmados con billetes reales (2026-09-29): 3 = $100, 7 = $2000, 8 = $10000.
 export const BILLETES = {
   1: ["$1", "$2", "$5", "$10", "$20", "$50", "$100"],
   4: ["€5", "€10", "€20", "€50", "€100", "€200", "€500"],
   115: ["$10", "$20", "$50", "$100", "$200", "$500", "$1000", "$2000", "$10000", "$20000"],
 };
+const BILLETES_BASE = structuredClone(BILLETES);
+
+/**
+ * Aplica el orden de billetes de un modelo de máquina (ver src/maquinas.js):
+ * parte de los valores base (SB-9) y reemplaza las monedas que el modelo define.
+ */
+export function usarBilletes(billetesModelo = {}) {
+  for (const k of Object.keys(BILLETES)) delete BILLETES[k];
+  Object.assign(BILLETES, structuredClone(BILLETES_BASE));
+  for (const [k, v] of Object.entries(billetesModelo)) BILLETES[Number(k)] = [...v];
+}
 
 // Estado que se va conociendo de la máquina.
 export const estado = {

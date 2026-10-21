@@ -5,7 +5,8 @@ Arma cada trama según el protocolo (Doc/PC_protocol_SB_MIB_series.md), la enví
 y muestra decodificado lo que responde la máquina.
 
 Uso:
-  python probar_com.py                 (COM5, 115200)
+  python probar_com.py                 (COM5, modelo sb9 a 115200)
+  python probar_com.py --modelo mib9   (MIB-9: 57600 y su orden de billetes)
   python probar_com.py --puerto COM3
   python probar_com.py --ip 192.168.123.231   (por red, puerto 4101)
   python probar_com.py --prueba        (autoprueba sin máquina)
@@ -15,6 +16,7 @@ Escribir "ayuda" dentro de la consola para ver los comandos.
 """
 
 import argparse
+import json
 import os
 import re
 import sys
@@ -93,14 +95,31 @@ SUBCMD = {
 MODOS2 = {0: "COUNT", 1: "MIXED", 2: "SINGLE", 3: "FACE", 4: "ORIENT", 5: "SERIAL No. PRINT",
           6: "ISSUE", 7: "DISPENSE", 8: "OCR", 9: "MIXED CURRENCY"}
 VELOCIDAD = {0: "1000 rpm", 1: "1200 rpm", 2: "1500 rpm", 3: "600 rpm", 4: "800 rpm", 5: "900 rpm"}
-# Billetes por índice de denominación, según código de moneda.
-# ARS: confirmados con billetes reales (2026-09-29): 3 = $100, 7 = $2000, 8 = $10000.
-# El resto sigue el orden ascendente del protocolo (0 = menor valor).
+# Billetes por índice de denominación, según código de moneda. Valores base (SB-9);
+# cada modelo de ../maquinas.json puede reemplazar la lista de una moneda (ver usar_modelo).
+# SB-9, ARS: confirmados con billetes reales (2026-09-29): 3 = $100, 7 = $2000, 8 = $10000.
 BILLETES = {
     1: ["$1", "$2", "$5", "$10", "$20", "$50", "$100"],
     4: ["€5", "€10", "€20", "€50", "€100", "€200", "€500"],
     115: ["$10", "$20", "$50", "$100", "$200", "$500", "$1000", "$2000", "$10000", "$20000"],
 }
+BILLETES_BASE = {k: list(v) for k, v in BILLETES.items()}
+MODELO_POR_DEFECTO = "sb9"
+
+
+def cargar_maquinas():
+    """Modelos de ../maquinas.json: velocidad y orden de billetes de cada máquina."""
+    with open(os.path.join(AQUI, "..", "maquinas.json"), encoding="utf-8") as f:
+        return json.load(f)
+
+
+def usar_modelo(nombre):
+    """Aplica el orden de billetes del modelo y devuelve su configuración."""
+    modelo = cargar_maquinas()[nombre]
+    BILLETES.clear()
+    BILLETES.update({k: list(v) for k, v in BILLETES_BASE.items()})
+    BILLETES.update({int(k): v for k, v in modelo.get("billetes", {}).items()})
+    return modelo
 moneda_actual = [None]  # se actualiza al recibir 31h / 41h
 config_actual = [None]  # últimos 11 parámetros de 41h, base para cambiar la configuración
 config_version = [0]    # aumenta con cada 41h recibido (para esperar una relectura)
@@ -516,7 +535,8 @@ def consola(args):
         print(f"No se pudo abrir {destino}: {e}")
         print("¿Está IFD.exe u otro programa conectado a la máquina?")
         sys.exit(1)
-    print(f"Conectado a {destino}. Escribe 'ayuda'. Empieza con 'knock'.")
+    serie = "" if args.ip else f" a {args.baudios} baudios"
+    print(f"Conectado a {destino}{serie} (modelo {args.nombre_modelo}). Escribe 'ayuda'. Empieza con 'knock'.")
     try:
         while True:
             try:
@@ -678,21 +698,38 @@ def autoprueba():
     print("\nEjemplo RESULT_DATA del protocolo (US$):", "checksum OK" if v2 else motivo2)
     for linea in decodificar(d2):
         print("  " + linea)
+    print("\nModelos de ../maquinas.json (moneda ARS, índices 3 y 6):")
+    for nombre, esperado in (("mib9", ("$1000", "$100")), ("sb9", ("$100", "$1000"))):
+        m = usar_modelo(nombre)
+        moneda_actual[0] = 115
+        bien = (billete(3), billete(6)) == esperado
+        v = v and bien
+        print(f"  {'OK ' if bien else 'MAL'} {nombre}: {m['nombre']}, {m['baudios']} baudios, "
+              f"índice 3 = {billete(3)}, índice 6 = {billete(6)}")
     print("\nAutoprueba", "APROBADA" if ok and v and v2 else "FALLIDA")
 
 
 def main():
     ap = argparse.ArgumentParser(description="Probar el protocolo de la contadora por puerto serie.")
+    ap.add_argument("--modelo", default=MODELO_POR_DEFECTO,
+                    help="máquina de ../maquinas.json (sb9, mib9): velocidad y orden de billetes")
     ap.add_argument("--puerto", default="COM5")
-    ap.add_argument("--baudios", type=int, default=115200)
+    ap.add_argument("--baudios", type=int, help="por defecto, la del modelo")
     ap.add_argument("--ip", help="conectar por red a esta IP en vez de por puerto serie")
     ap.add_argument("--puerto-tcp", type=int, default=4101)
     ap.add_argument("--prueba", action="store_true", help="autoprueba sin máquina")
     args = ap.parse_args()
     if args.prueba:
         autoprueba()
-    else:
-        consola(args)
+        return
+    try:
+        modelo = usar_modelo(args.modelo)
+    except (OSError, ValueError, KeyError):
+        print(f"Modelo desconocido: {args.modelo}. Ver ../maquinas.json")
+        sys.exit(1)
+    args.baudios = args.baudios or modelo.get("baudios", 115200)
+    args.nombre_modelo = modelo.get("nombre", args.modelo)
+    consola(args)
 
 
 if __name__ == "__main__":

@@ -6,7 +6,8 @@
  * y muestra decodificado lo que responde la máquina.
  *
  * Uso:
- *   node probar.js                        (COM5, 115200)
+ *   node probar.js                        (COM5, modelo sb9 a 115200)
+ *   node probar.js --modelo mib9          (MIB-9: 57600 y su orden de billetes)
  *   node probar.js --puerto COM3
  *   node probar.js --ip 192.168.123.231   (por red, puerto 4101)
  *   node probar.js --prueba               (autoprueba sin máquina)
@@ -29,6 +30,7 @@ import { abrirSerie, abrirTcp } from "./src/conexion.js";
 import { crearRegistro } from "./src/registro.js";
 import { autoprueba } from "./src/autoprueba.js";
 import * as perfiles from "./src/perfiles.js";
+import { usarModelo, MODELO_POR_DEFECTO } from "./src/maquinas.js";
 
 const PAUSA_MIN = 100; // el protocolo pide >= 100 ms entre tramas enviadas
 
@@ -268,7 +270,7 @@ async function consola(args) {
     return;
   }
   const con = new Consola(conexion);
-  console.log(`Conectado a ${conexion.descripcion}. Escribe 'ayuda'. Empieza con 'knock'.`);
+  console.log(`Conectado a ${conexion.descripcion} (modelo ${args.nombreModelo}). Escribe 'ayuda'. Empieza con 'knock'.`);
 
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   const cerrada = new Promise((ok) => rl.once("close", () => ok(null)));
@@ -335,8 +337,9 @@ async function consola(args) {
 
 const { values: args } = parseArgs({
   options: {
+    modelo: { type: "string", default: MODELO_POR_DEFECTO }, // ../maquinas.json: sb9, mib9
     puerto: { type: "string", default: "COM5" },
-    baudios: { type: "string", default: "115200" },
+    baudios: { type: "string" }, // por defecto, la del modelo
     ip: { type: "string" },
     "puerto-tcp": { type: "string", default: "4101" },
     prueba: { type: "boolean", default: false },
@@ -346,5 +349,14 @@ const { values: args } = parseArgs({
 if (args.prueba) {
   process.exitCode = autoprueba() ? 0 : 1;
 } else {
+  let modelo;
+  try {
+    modelo = usarModelo(args.modelo);
+  } catch (e) {
+    console.log(e.message);
+    process.exit(1);
+  }
+  args.baudios ??= String(modelo.baudios ?? 115200);
+  args.nombreModelo = modelo.nombre ?? args.modelo;
   await consola(args);
 }

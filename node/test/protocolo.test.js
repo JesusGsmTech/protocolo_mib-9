@@ -8,6 +8,8 @@ import {
 } from "../src/protocolo.js";
 import { CASOS_ARMADO, CONFIG_REAL, RESULTADO_ARS, EJEMPLO_34 } from "../src/autoprueba.js";
 import * as perfiles from "../src/perfiles.js";
+import { usarModelo } from "../src/maquinas.js";
+import { billete } from "../src/protocolo.js";
 
 test("arma tramas idénticas a los ejemplos del protocolo y a IFD.exe", () => {
   for (const [datos, esperado] of CASOS_ARMADO) assert.equal(hex(armarTrama(datos)), esperado);
@@ -88,6 +90,15 @@ test("perfiles: cada uno se aplica sobre la config real y queda verificado", () 
   assert.equal(p2[7], 50); // lote indicado en el comando
   assert.equal(p2[2] & 1, 1); // batch on
   assert.equal(p2[6], 0x00); // bandejas: rechazo 100 / salida 300
+});
+
+test("modelos de maquinas.json: cada uno con su orden de billetes", () => {
+  estado.moneda = 115;
+  assert.equal(usarModelo("mib9").baudios, 57600);
+  assert.deepEqual([billete(3), billete(6)], ["$1000", "$100"]);
+  assert.equal(usarModelo("sb9").baudios, 115200);
+  assert.deepEqual([billete(3), billete(6)], ["$100", "$1000"]);
+  assert.throws(() => usarModelo("xyz"), /Modelo desconocido/);
 });
 
 test("separa tramas y bytes sueltos aunque lleguen partidos", () => {

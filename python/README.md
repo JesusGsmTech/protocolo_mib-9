@@ -1,74 +1,90 @@
-# Herramientas Python — contadora SB-7 / SB-9
+# Python — contadora SB-7 / SB-9
 
-Carpeta de trabajo en Python. El resto del proyecto (C++/MFC, `bin/`) no se modifica.
+Consola de pruebas, escucha de tráfico y perfiles en Python. Equivalente a la versión de
+[`../node`](../node/README.md). La referencia de comandos y el resumen del protocolo están en
+el [README principal](../README.md).
 
-Requisitos: Python 3 y `pyserial` (`pip install -r requirements.txt`).
+## Instalación
 
-## probar_com.py: hablar con la máquina sin IFD.exe
-
-Consola interactiva que arma cada trama según el protocolo
-(`Doc/PC_protocol_SB_MIB_series.md`), la envía por el puerto serie y muestra la
-respuesta decodificada. Cierra `IFD.exe` antes de usarla.
-
+Python 3 y `pyserial`:
 ```
-python probar_com.py                # COM5 a 115200
-python probar_com.py --prueba       # autoprueba sin máquina
+pip install -r requirements.txt
 ```
 
-Secuencia típica:
+## Archivos
+
+| Archivo | Qué es |
+|---|---|
+| `probar_com.py` | Consola interactiva. Contiene también todo el protocolo: armar/verificar tramas, decodificar, cambios de configuración y autoprueba |
+| `perfiles.py` | Aplica y verifica los perfiles de `../perfiles.json` |
+| `escuchar_puerto.py` | Escucha el tráfico entre IFD.exe y la máquina (monitor / puente / proxy TCP) |
+| `capturas/` | Capturas de Wireshark de la máquina real, usadas como referencia y en la autoprueba |
+| `logs/` | Registro de cada sesión (no se sube a git) |
+
+## probar_com.py: probar la máquina
+
 ```
-knock                 -> la máquina responde ACK
-pedir estado2         -> configuración (41h)
-iniciar               -> cuenta los billetes (COUNT_START ... COUNT_STOP, RESULT_DATA)
-pedir resultado       -> último resultado (34h)
-setup2 1 0            -> activa los datos billete a billete (1BYTE_COUNT_DATA)
-release               -> suelta la máquina
+python probar_com.py --ip 192.168.123.231     # por red (puerto 4101)
+python probar_com.py                          # por puerto serie COM5, 115200
+python probar_com.py --puerto COM3            # otro puerto serie
+python probar_com.py --modelo mib9            # MIB-9: 57600 y su orden de billetes (../maquinas.json)
+python probar_com.py --prueba                 # autoprueba sin máquina
 ```
-Escribe `ayuda` para ver todos los comandos. `datos 35 02` envía una trama armada
-con los bytes que indiques, y `crudo F0 F1 ...` envía bytes tal cual.
-`default`, `moneda` y `reboot` modifican la máquina y piden confirmación.
+Cierra o desconecta `IFD.exe` antes: la máquina acepta una sola conexión.
 
-Formato de trama: `F0 F1 LEN 19 02 00 00 00 SID` + cada byte de datos partido en
-2 nibbles + checksum (suma desde LEN, también en 2 nibbles). LEN = total − 4.
-
-## escuchar_puerto.py
-
-Muestra en pantalla, en hexadecimal y ASCII y con la hora, los bytes que van
-entre la PC y la máquina. También los guarda en `logs/`.
-
-Un puerto COM solo lo puede abrir **un programa a la vez**. Por eso hay tres modos:
-
-### 1. `monitor`: solo escuchar a la máquina
+Sesión típica:
 ```
-python escuchar_puerto.py monitor --puerto COM5
+knock                 -> ACK + configuración actual
+perfil 1              -> mixto sin límite, verificado campo por campo
+iniciar               -> COUNT_START, un dato por billete, COUNT_STOP, resultado con monto
+pedir sensores        -> tapas, tolva, bandejas, errores
+salir
 ```
-Cierra `IFD.exe` antes. Muestra lo que la máquina envía por su cuenta (por ejemplo,
-resultados en modo Auto), pero no se ve lo que enviaría la PC.
+Cada sesión queda en `logs/probar_AAAAMMDD_HHMMSS.log`, con cada trama en hexadecimal y su traducción.
 
-### 2. `tcp`: espiar IFD.exe por red (recomendado, no necesita drivers)
-```
-python escuchar_puerto.py tcp --maquina 192.168.10.109
-```
-En `bin/IFDCTRL.INI` cambia `[SOCKET] ADDRESS=127.0.0.1` y conecta IFD.exe por TCP.
-El programa reenvía todo a la máquina y muestra ambos sentidos
-(`PC -> MAQ` y `MAQ -> PC`). Al terminar, vuelve a poner la IP real en el `.ini`.
+## escuchar_puerto.py: ver qué envía IFD.exe
 
-### 3. `puente`: espiar IFD.exe por el puerto serie
-Necesita **com0com**, que crea un par de puertos virtuales conectados entre sí
-(por ejemplo, COM20 <-> COM21).
-1. Instala com0com y crea el par COM20/COM21.
-2. En `bin/IFDCTRL.INI` pon `PORT ID=21`, para que IFD.exe use el puerto virtual.
-3. Ejecuta:
-   ```
-   python escuchar_puerto.py puente --real COM5 --virtual COM20
-   ```
-4. Abre IFD.exe y conecta. Verás ambos sentidos.
+Útil para descubrir comandos que el documento no describe.
 
-Al terminar, vuelve a poner `PORT ID=5` en el `.ini`.
+```
+python escuchar_puerto.py tcp --maquina 192.168.123.231      # proxy TCP, sin drivers (recomendado)
+python escuchar_puerto.py monitor --puerto COM5              # solo lo que envía la máquina
+python escuchar_puerto.py puente --real COM5 --virtual COM20 # serie, requiere com0com
+```
+- **tcp**: en `bin/IFDCTRL.INI` poner `[SOCKET] ADDRESS=127.0.0.1` y conectar IFD.exe por TCP.
+  Al terminar, volver a poner la IP real.
+- **puente**: crear con com0com un par de puertos virtuales (ej. COM20 ↔ COM21) y en
+  `bin/IFDCTRL.INI` poner `PORT ID=21`. Al terminar, volver a `PORT ID=5`.
 
-## Formato de salida
+## Usar el protocolo desde otra aplicación
+
+Las funciones del protocolo se pueden importar desde `probar_com.py` (la consola solo se
+ejecuta con `python probar_com.py`, no al importar):
+
+```python
+import socket
+from probar_com import armar_trama, verificar_trama, decodificar
+
+s = socket.create_connection(("192.168.123.231", 4101))
+s.sendall(armar_trama([0x30, 0x01]))            # KNOCK
+ok, motivo, datos = verificar_trama(s.recv(64))  # ACK
+print(decodificar(datos))                        # ['ACK']
+s.sendall(armar_trama([0x35, 0x12]))            # pedir configuración
+ok, motivo, datos = verificar_trama(s.recv(64))
+print(decodificar(datos))                        # moneda, modo, estado, lote...
 ```
-14:32:10.512 PC -> MAQ (11 bytes)
-    0000  0B 19 02 00 00 00 00 03 05 00 01              ...........
-```
-Los bytes que llegan seguidos (sin más de 20 ms de silencio entre ellos) se muestran como una sola trama.
+
+Funciones principales:
+
+| Función | Qué hace |
+|---|---|
+| `armar_trama(datos)` | `[comando, parámetros…]` → bytes listos para enviar |
+| `verificar_trama(bytes)` | Valida inicio, largo y checksum → `(ok, motivo, datos)` |
+| `decodificar(datos)` | Traduce una respuesta a líneas de texto |
+| `usar_modelo("mib9")` | Aplica el orden de billetes de un modelo de `../maquinas.json` y devuelve su configuración (velocidad) |
+| `trama_cambiar_modo`, `trama_auto`, `trama_batch`, `trama_lote`, `trama_sensor`, `trama_divisa`, `trama_denom` | Arman el cambio de configuración a partir de la última leída (`config_actual`) |
+
+**Limitación actual:** separar lo recibido en tramas y en bytes sueltos (los datos billete a
+billete llegan fuera de trama) está dentro de la clase `Consola` (`Consola.leer`). Otra
+aplicación tiene que replicar esa lógica. En Node ya está separada (`Separador`), y el
+siguiente paso previsto es hacer lo mismo aquí con un `protocolo.py` independiente.

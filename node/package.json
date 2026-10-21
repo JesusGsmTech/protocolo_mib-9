@@ -10,6 +10,7 @@
   "scripts": {
     "start": "node probar.js",
     "red": "node probar.js --ip 192.168.123.231",
+    "mib9": "node probar.js --modelo mib9",
     "prueba": "node probar.js --prueba",
     "test": "node --test"
   },
